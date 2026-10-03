@@ -2,6 +2,16 @@
 
 Point a phone at a board and read it in English.
 
+Built at **ATOX AI Vibe Coding** (ATOX × TIDE, Sharing & Networking Session),
+Saturday 3 October 2026, G Vestor Tower, Pavilion Embassy. The session's
+theme was how AI can help tourism and local businesses in Malaysia.
+
+The boards in Muzium Tentera Darat are in Malay only, or carry English with
+errors. This app reads a board through the phone camera, works out which
+board it is, and shows an English translation. Everything runs on the phone,
+with no server and no account, and it keeps working without signal once
+it has been opened once.
+
 camera → grey + flatten lighting + invert → Tesseract (Malay, on-device) → fuzzy-match against `text_ms` in `signs.json` → show `text_en`
 
 - `index.html`: the app (live camera, photo upload, or browse the list by hand)
