@@ -1,0 +1,8 @@
+{
+  "name": "Muzium Tentera Darat Board Reader",
+  "short_name": "Board Reader",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#14161a",
+  "theme_color": "#14161a"
+}

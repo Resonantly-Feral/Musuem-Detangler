@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Board Reader</title>
+<meta name="description" content="Point your phone at a board in the Muzium Tentera Darat and read it in English.">
+<meta name="theme-color" content="#14161a">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #f6f4ef; --surface: #ffffff; --text: #1b1c1f; --muted: #5d6068;
+    --line: #dedad0; --accent: #2f5d3a; --accent-text: #ffffff; --warn: #8a5a00;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a; --surface: #1e2126; --text: #ecebe6; --muted: #a2a5ad;
+      --line: #33373e; --accent: #7fb48a; --accent-text: #0f1a12; --warn: #e2b04a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --surface: #1e2126; --text: #ecebe6; --muted: #a2a5ad;
+    --line: #33373e; --accent: #7fb48a; --accent-text: #0f1a12; --warn: #e2b04a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 18px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) 16px calc(24px + env(safe-area-inset-bottom));
+    max-width: 720px; margin: 0 auto;
+  }
+  header { padding: 18px 0 8px; }
+  header h1 { font-size: 1.15rem; margin: 0; letter-spacing: .01em; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
+  [hidden] { display: none !important; }
+
+  button, .btn {
+    font: inherit; border: 0; border-radius: var(--radius); cursor: pointer;
+    padding: 16px 18px; width: 100%; display: block; text-align: center;
+    background: var(--surface); color: var(--text); border: 1px solid var(--line);
+  }
+  button.primary, .btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+  button:focus-visible, .btn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .stack > * + * { margin-top: 10px; }
+  .btn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .btn { position: relative; }
+
+  .seg { display: flex; gap: 6px; align-items: center; margin-top: 18px; color: var(--muted); font-size: .9rem; }
+  .seg span { margin-right: 4px; }
+  .seg button { width: auto; padding: 6px 12px; border-radius: 999px; font-size: .9rem; }
+  .seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  .camera { position: fixed; inset: 0; background: #000; z-index: 10; display: flex; flex-direction: column; }
+  .camera video { flex: 1; width: 100%; min-height: 0; object-fit: contain; }
+  .camera .bar { display: flex; gap: 10px; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+  .camera .bar button { flex: 1; }
+  .camera .hint { color: #ddd; text-align: center; font-size: .9rem; padding: 10px 16px 0; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .status { color: var(--muted); }
+  progress { width: 100%; height: 8px; accent-color: var(--accent); }
+  .preview { width: 100%; border-radius: 10px; margin-top: 12px; border: 1px solid var(--line); }
+
+  article h2 { font-size: 1.25rem; line-height: 1.3; margin: 0 0 12px; }
+  article p { margin: 0; }
+  details { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .card > details:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+  summary { cursor: pointer; color: var(--muted); font-size: .95rem; }
+  details p, details pre { margin-top: 10px; font-size: .95rem; }
+  pre { white-space: pre-wrap; word-break: break-word; font: .85rem/1.4 ui-monospace, Menlo, monospace; color: var(--muted); }
+  .badge { display: inline-block; font-size: .8rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; margin-bottom: 10px; }
+  .cands button { text-align: left; }
+  .cands small { display: block; color: var(--muted); }
+  .note { color: var(--warn); font-size: .9rem; }
+  footer { color: var(--muted); font-size: .8rem; margin-top: 28px; }
+  ul.list { list-style: none; padding: 0; margin: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Muzium Tentera Darat · Board Reader</h1>
+  <p>Point your camera at a board to read it in English.</p>
+</header>
+
+<main>
+  <!-- Home -->
+  <section id="home" class="stack">
+    <button id="scan" class="primary" type="button">Scan a board</button>
+    <label class="btn" id="upload-label">
+      <span id="upload-text">Take or choose a photo</span>
+      <input id="upload" type="file" accept="image/*" capture="environment">
+    </label>
+    <button id="browse" type="button">Browse all boards</button>
+    <div class="seg" role="group" aria-label="Invert colours">
+      <span>Invert colours</span>
+      <button type="button" data-invert="on">On</button>
+      <button type="button" data-invert="auto">Auto</button>
+      <button type="button" data-invert="off">Off</button>
+    </div>
+    <p class="status" id="engine">Loading Malay text reader…</p>
+  </section>
+
+  <!-- Live camera -->
+  <section id="camera" class="camera" hidden>
+    <video id="video" playsinline muted></video>
+    <div class="hint">Fill the screen with the text, hold steady, then tap Read.</div>
+    <div class="bar">
+      <button id="cancel" type="button">Cancel</button>
+      <button id="shoot" class="primary" type="button">Read</button>
+    </div>
+  </section>
+
+  <!-- Working -->
+  <section id="working" class="card" hidden>
+    <p class="status" id="work-status">Reading…</p>
+    <progress id="work-progress" max="1" value="0"></progress>
+    <img class="preview" id="work-preview" alt="The photo as the text reader sees it">
+  </section>
+
+  <!-- Result -->
+  <section id="result" hidden>
+    <div id="result-body"></div>
+    <div class="stack" style="margin-top:16px">
+      <button id="again" class="primary" type="button">Scan another board</button>
+      <button id="home-btn" type="button">Back</button>
+    </div>
+  </section>
+
+  <!-- Browse -->
+  <section id="list" hidden>
+    <ul class="list stack" id="list-items"></ul>
+    <div class="stack" style="margin-top:16px"><button id="list-back" type="button">Back</button></div>
+  </section>
+</main>
+
+<footer id="footer"></footer>
+
+<script src="vendor/tesseract.min.js"></script>
+<script type="module">
+import { buildIndex, bestDecision } from './match.js';
+
+const $ = (id) => document.getElementById(id);
+const views = ['home', 'camera', 'working', 'result', 'list'];
+function show(view) { for (const v of views) $(v).hidden = v !== view; window.scrollTo(0, 0); }
+
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+// ---- data -----------------------------------------------------------------
+const data = await fetch('signs.json').then((r) => r.json());
+const index = buildIndex(data.signs);
+$('footer').textContent = `${data.meta.museum}. ${data.meta.text_en}`;
+
+// ---- OCR engine (all local files, so it works offline once loaded) --------
+let workerReady;
+let onProgress = () => {};
+function getWorker() {
+  workerReady ??= Tesseract.createWorker('msa', 1, {
+    workerPath: new URL('vendor/worker.min.js', location.href).href,
+    corePath: new URL('vendor/core/', location.href).href,
+    langPath: new URL('vendor/lang', location.href).href,
+    workerBlobURL: false,
+    logger: (m) => onProgress(m),
+  }).then((w) => { $('engine').textContent = 'Ready. Works offline from here.'; return w; },
+          (e) => { $('engine').textContent = 'Text reader failed to load: ' + e; workerReady = null; throw e; });
+  return workerReady;
+}
+getWorker().catch(() => {});
+
+// ---- invert setting ---------------------------------------------------------
+let invertMode = store.get('invert', 'on');
+function paintInvert() {
+  for (const b of document.querySelectorAll('[data-invert]')) b.setAttribute('aria-pressed', String(b.dataset.invert === invertMode));
+}
+for (const b of document.querySelectorAll('[data-invert]')) {
+  b.addEventListener('click', () => { invertMode = b.dataset.invert; store.set('invert', invertMode); paintInvert(); });
+}
+paintInvert();
+
+// ---- image prep: grey, flatten lighting, make text dark-on-white ---------
+// Tesseract wants dark text on a plain light page. The boards are light text
+// on a dark ground, and museum lighting is uneven (spotlights, glare on the
+// glass), so one global contrast stretch isn't enough: a glare patch is
+// brighter than the text elsewhere. Instead each pixel is compared with the
+// average of its neighbourhood, which keeps only the strokes and throws
+// away the lighting. "Invert colours" says which way round the text is:
+//   on   – light text on dark (the boards)
+//   off  – dark text on light
+//   auto – guess from whichever extreme is sparser (text is the sparse one)
+function prepare(source, w, h) {
+  const scale = Math.min(1, 2000 / Math.max(w, h));
+  const cw = Math.round(w * scale), ch = Math.round(h * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(source, 0, 0, cw, ch);
+  const img = ctx.getImageData(0, 0, cw, ch);
+  const px = img.data;
+  const n = cw * ch;
+
+  const grey = new Float32Array(n);
+  for (let i = 0, j = 0; j < n; i += 4, j++) grey[j] = (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000;
+
+  // Neighbourhood mean via an integral image.
+  const W = cw + 1;
+  const sum = new Float64Array(W * (ch + 1));
+  for (let y = 0; y < ch; y++) {
+    let row = 0;
+    for (let x = 0; x < cw; x++) { row += grey[y * cw + x]; sum[(y + 1) * W + x + 1] = sum[y * W + x + 1] + row; }
+  }
+  const r = Math.max(15, Math.round(Math.max(cw, ch) / 40));
+  const diff = new Float32Array(n);
+  const hist = new Uint32Array(511); // diff -255..255
+  for (let y = 0; y < ch; y++) {
+    const y0 = Math.max(0, y - r), y1 = Math.min(ch, y + r + 1);
+    for (let x = 0; x < cw; x++) {
+      const x0 = Math.max(0, x - r), x1 = Math.min(cw, x + r + 1);
+      const mean = (sum[y1 * W + x1] - sum[y0 * W + x1] - sum[y1 * W + x0] + sum[y0 * W + x0]) / ((y1 - y0) * (x1 - x0));
+      const d = grey[y * cw + x] - mean;
+      diff[y * cw + x] = d;
+      hist[Math.round(d) + 255]++;
+    }
+  }
+  const pct = (p) => { let acc = 0; const target = n * p; for (let v = 0; v < 511; v++) { acc += hist[v]; if (acc >= target) return v - 255; } return 255; };
+  const lo = pct(0.005), hi = pct(0.995);
+  const light = invertMode === 'on' || (invertMode === 'auto' && hi > -lo);
+  const sign = light ? 1 : -1;
+  const peak = Math.max(4, light ? hi : -lo);
+  const floor = peak * 0.12; // ignore faint texture in the background
+  const gain = 255 / (peak - floor);
+  for (let i = 0, j = 0; j < n; i += 4, j++) {
+    const t = (sign * diff[j] - floor) * gain;
+    px[i] = px[i + 1] = px[i + 2] = 255 - Math.min(255, Math.max(0, t));
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
+// ---- the pipeline -----------------------------------------------------------
+async function readImage(source, w, h) {
+  show('working');
+  $('work-status').textContent = 'Preparing photo…';
+  $('work-progress').value = 0;
+  const canvas = prepare(source, w, h);
+  $('work-preview').src = canvas.toDataURL('image/jpeg', 0.7);
+  onProgress = (m) => {
+    if (m.status === 'recognizing text') { $('work-status').textContent = 'Reading the Malay text…'; $('work-progress').value = m.progress; }
+    else $('work-status').textContent = 'Loading text reader…';
+  };
+  try {
+    const worker = await getWorker();
+    const { data } = await worker.recognize(canvas);
+    showResult(data.text, data.words);
+  } catch (e) {
+    $('result-body').innerHTML = `<div class="card"><p>Something went wrong reading the photo.</p><pre></pre></div>`;
+    $('result-body').querySelector('pre').textContent = String(e);
+    show('result');
+  }
+}
+
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === 'class' ? (n.className = v) : n.setAttribute(k, v);
+  for (const c of kids) n.append(c);
+  return n;
+}
+
+function signCard(sign, badge) {
+  const art = el('article', { class: 'card' });
+  if (badge) art.append(el('span', { class: 'badge' }, badge));
+  art.append(el('h2', {}, sign.heading_en), el('p', {}, sign.text_en));
+  const ms = el('details', {}, el('summary', {}, 'Malay original'), el('p', { lang: 'ms' }, sign.heading_ms), el('p', { lang: 'ms' }, sign.text_ms));
+  art.append(ms);
+  return art;
+}
+
+function showSign(sign, badge) {
+  $('result-body').replaceChildren(signCard(sign, badge));
+  show('result');
+}
+
+function showResult(rawText, words) {
+  const { text, ranking, decision: d } = bestDecision(index, rawText, words);
+  const body = $('result-body');
+  body.replaceChildren();
+
+  if (d.kind === 'match') {
+    body.append(signCard(d.best.sign, `Matched · ${Math.round(d.best.score * 100)}%`));
+    const others = d.candidates.slice(1);
+    if (others.length) body.append(candidateList('Also in the photo?', others));
+  } else if (d.kind === 'ambiguous') {
+    body.append(el('div', { class: 'card' }, el('p', {}, 'Not completely sure. Which of these is it?')));
+    body.append(candidateList(null, d.candidates));
+  } else {
+    body.append(el('div', { class: 'card' },
+      el('p', {}, 'Couldn’t read enough of a board.'),
+      el('p', { class: 'status' }, 'Try getting closer so the text fills the screen, avoid glare, or switch “Invert colours”.')));
+  }
+
+  const dbg = el('details', {}, el('summary', {}, 'What the camera read'),
+    el('pre', {}, ranking.results.slice(0, 3).map((r) => `${(r.score * 100).toFixed(0).padStart(3)}%  ${r.sign.id}`).join('\n') + `\n\ninvert: ${invertMode}\n\n${text.trim() || '(nothing)'}`));
+  body.append(el('div', { class: 'card', style: 'margin-top:12px' }, dbg));
+  show('result');
+}
+
+function candidateList(title, cands) {
+  const wrap = el('div', { class: 'stack cands', style: 'margin-top:12px' });
+  if (title) wrap.append(el('p', { class: 'status' }, title));
+  for (const c of cands) {
+    const b = el('button', { type: 'button' }, c.sign.heading_ms, el('small', {}, `${c.sign.heading_en} · ${Math.round(c.score * 100)}%`));
+    b.addEventListener('click', () => showSign(c.sign, 'Chosen by you'));
+    wrap.append(b);
+  }
+  return wrap;
+}
+
+// ---- camera -----------------------------------------------------------------
+let stream = null;
+const canLive = !!(navigator.mediaDevices?.getUserMedia) && window.isSecureContext;
+if (!canLive) { $('scan').hidden = true; $('upload-label').classList.add('primary'); }
+
+$('scan').addEventListener('click', async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    });
+  } catch (e) {
+    $('engine').textContent = 'Camera not available (' + e.name + '). Use “Take or choose a photo” instead.';
+    return;
+  }
+  $('video').srcObject = stream;
+  show('camera');
+  await $('video').play().catch(() => {});
+});
+function stopCamera() { stream?.getTracks().forEach((t) => t.stop()); stream = null; $('video').srcObject = null; }
+$('cancel').addEventListener('click', () => { stopCamera(); show('home'); });
+$('shoot').addEventListener('click', () => {
+  const v = $('video');
+  if (!v.videoWidth) return;
+  const frame = document.createElement('canvas');
+  frame.width = v.videoWidth; frame.height = v.videoHeight;
+  frame.getContext('2d').drawImage(v, 0, 0);
+  stopCamera();
+  readImage(frame, frame.width, frame.height);
+});
+
+$('upload').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (!file) return;
+  const bmp = await createImageBitmap(file);
+  readImage(bmp, bmp.width, bmp.height);
+});
+
+// ---- navigation -------------------------------------------------------------
+$('again').addEventListener('click', () => (canLive ? $('scan').click() : $('upload').click()));
+$('home-btn').addEventListener('click', () => show('home'));
+$('browse').addEventListener('click', () => {
+  $('list-items').replaceChildren(...data.signs.map((s) => {
+    const b = el('button', { type: 'button' }, s.heading_ms, el('small', {}, s.heading_en));
+    b.addEventListener('click', () => showSign(s));
+    return el('li', { class: 'cands' }, b);
+  }));
+  show('list');
+});
+$('list-back').addEventListener('click', () => show('home'));
+
+// ---- offline ----------------------------------------------------------------
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
